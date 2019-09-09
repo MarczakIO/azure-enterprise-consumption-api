@@ -3,13 +3,13 @@
     "contentVersion": "1.0.0.0",
     "parameters": {
         "functionAppName": {
-            "value": "amfuncdemoapp02"
+            "value": "amfuncdemoapp03"
+        },
+        "keyVaultName": {
+            "value": "amfuncdemoapp03"
         },
         "ApplicationInsightsLocation": {
             "value": "North Europe"
-        },
-        "keyVaultName": {
-            "value": "amfuncdemoapp01"
         }
     }
 }
