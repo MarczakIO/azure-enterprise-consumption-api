@@ -1,5 +1,5 @@
-$subscriptionId = ""
-$resourceGroup = ""
+$subscriptionId = "84717e9e-5b58-4068-a903-2604a799282c"
+$resourceGroup = "azure-enterprise-consumption-dev"
 
 Select-AzSubscription -SubscriptionId $subscriptionId
 

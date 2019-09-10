@@ -3,13 +3,13 @@
     "contentVersion": "1.0.0.0",
     "parameters": {
         "functionAppName": {
-            "value": "amfuncdemoapp03"
+            "value": "FUNCTION-APP_NAME-GOES-HERE"
         },
-        "keyVaultName": {
-            "value": "amfuncdemoapp03"
+        "EnterpriseAzureIds": {
+            "value": [123456789]
         },
-        "ApplicationInsightsLocation": {
-            "value": "North Europe"
+        "EnterpriseAzureKeys": {
+            "value": ["EA-KEY-GOES-HERE"]
         }
     }
 }
