@@ -47,13 +47,6 @@
                 "description": "Specifies the name of the key vault."
             }
         },
-        "tenantId": {
-            "type": "string",
-            "defaultValue": "[subscription().tenantId]",
-            "metadata": {
-                "description": "Specifies the Azure Active Directory tenant ID that should be used for authenticating requests to the key vault. Get it by using Get-AzSubscription cmdlet."
-            }
-        },
         "secretsPermissions": {
             "type": "array",
             "defaultValue": [
@@ -239,11 +232,11 @@
                 "enabledForDeployment": false,
                 "enabledForDiskEncryption": false,
                 "enabledForTemplateDeployment": false,
-                "tenantId": "[parameters('tenantId')]",
+                "tenantId": "[subscription().tenantId]",
                 "accessPolicies": [
                     {
                         "objectId": "[reference(concat(resourceId('Microsoft.Web/sites/', parameters('functionAppName')), '/providers/Microsoft.ManagedIdentity/Identities/default'), '2015-08-31-PREVIEW').principalId]",
-                        "tenantId": "[parameters('tenantId')]",
+                        "tenantId": "[subscription().tenantId]",
                         "permissions": {
                             "secrets": "[parameters('secretsPermissions')]"
                         }
