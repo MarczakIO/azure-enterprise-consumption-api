@@ -148,6 +148,10 @@
                         {
                             "name": "EnterpriseAzureIds",
                             "value": "[replace(replace(string(parameters('EnterpriseAzureIds')), '[', ''), ']', '')]"
+                        },
+                        {
+                            "name": "KeyVaultName",
+                            "value": "[parameters('keyVaultName')]"
                         }
                     ]
                 },
