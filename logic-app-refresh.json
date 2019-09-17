@@ -31,10 +31,10 @@
         }
     },
     "variables": {
-        "storageAccountName": "[concat('eastor', uniquestring(resourceGroup().id))]",
-        "keyVaultName": "[concat('eastor', uniquestring(resourceGroup().id))]",
+        "storageAccountName": "[concat('eablob', uniquestring(resourceGroup().id))]",
+        "keyVaultName": "[concat('eakeyvault', uniquestring(resourceGroup().id))]",
         "logicAppName": "[parameters('logicAppName')]",
-        "azureblobApiConnectionName": "[concat('blobconn', uniquestring(resourceGroup().id))]",
+        "azureblobApiConnectionName": "azureblob",
         "azureblobConnectionResourceId": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/connections/', variables('azureblobApiConnectionName'))]",
         "azureblobConnectionApiId": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
     },
