@@ -190,8 +190,8 @@
                                                         "Delay": {
                                                             "inputs": {
                                                                 "interval": {
-                                                                    "count": 20,
-                                                                    "unit": "Second"
+                                                                    "count": 2,
+                                                                    "unit": "Minute"
                                                                 }
                                                             },
                                                             "runAfter": {},
