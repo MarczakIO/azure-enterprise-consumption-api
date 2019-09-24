@@ -113,11 +113,11 @@
         },
         {
             "type": "Microsoft.KeyVault/vaults/secrets",
-            "name": "[concat(variables('keyVaultName'), '/', parameters('EnterpriseAzureId'))]",
+            "name": "[concat(parameters('keyVaultName'), '/', parameters('EnterpriseAzureId'))]",
             "apiVersion": "2018-02-14",
             "location": "[parameters('location')]",
             "dependsOn": [
-                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
             ],
             "properties": {
                 "value": "[parameters('EnterpriseAzureKey')]"
@@ -129,7 +129,7 @@
             "location": "[resourceGroup().location]",
             "name": "[variables('azureblobApiConnectionName')]",
             "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
             ],
             "properties": {
                 "api": {
@@ -139,7 +139,7 @@
                 "nonSecretParameterValues": {},
                 "parameterValues": {
                     "accountName": "[parameters('storageAccountName')]",
-                    "accessKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).keys[0].value]"
+                    "accessKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).keys[0].value]"
                 }
             }
         },
