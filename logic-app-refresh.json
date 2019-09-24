@@ -1,0 +1,402 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logicAppName": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Describes the name of the Logic App resource"
+            },
+            "defaultValue": "refresh-enterprise-azure-consumption"
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Specifies the Azure location where the key vault should be created."
+            }
+        },
+        "enterpriseAzureId": {
+            "type": "string",
+            "metadata": {
+                "description": "EA IDs."
+            }
+        },
+        "enterpriseAzureKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "EA Key."
+            }
+        }
+    },
+    "variables": {
+        "storageAccountName": "[concat('eablob', uniquestring(resourceGroup().id))]",
+        "keyVaultName": "[concat('eakeyvault', uniquestring(resourceGroup().id))]",
+        "logicAppName": "[parameters('logicAppName')]",
+        "azureblobApiConnectionName": "azureblob",
+        "azureblobConnectionResourceId": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/connections/', variables('azureblobApiConnectionName'))]",
+        "azureblobConnectionApiId": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
+    },
+    "resources": [
+        {
+            "name": "[variables('storageAccountName')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2018-07-01",
+            "location": "[parameters('location')]",
+            "kind": "StorageV2",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "accessTier": "Hot"
+            },
+            "resources": [
+                {
+                    "name": "[concat('default/', 'data')]",
+                    "type": "blobServices/containers",
+                    "apiVersion": "2018-07-01",
+                    "dependsOn": [
+                        "[variables('storageAccountName')]"
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults",
+            "name": "[variables('keyVaultName')]",
+            "apiVersion": "2018-02-14",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', variables('logicAppName'))]"
+            ],
+            "properties": {
+                "enabledForDeployment": false,
+                "enabledForDiskEncryption": false,
+                "enabledForTemplateDeployment": false,
+                "tenantId": "[subscription().tenantId]",
+                "accessPolicies": [
+                    {
+                        "objectId": "[reference(concat(resourceId('Microsoft.Logic/workflows/', variables('logicAppName')), '/providers/Microsoft.ManagedIdentity/Identities/default'), '2015-08-31-PREVIEW').principalId]",
+                        "tenantId": "[subscription().tenantId]",
+                        "permissions": {
+                            "secrets": ["get"]
+                        }
+                    }
+                ],
+                "sku": {
+                    "name": "standard",
+                    "family": "A"
+                },
+                "networkAcls": {
+                    "value": {
+                        "defaultAction": "Allow",
+                        "bypass": "AzureServices"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "name": "[concat(variables('keyVaultName'), '/', parameters('EnterpriseAzureId'))]",
+            "apiVersion": "2018-02-14",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('EnterpriseAzureKey')]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "location": "[resourceGroup().location]",
+            "name": "[variables('azureblobApiConnectionName')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+            ],
+            "properties": {
+                "api": {
+                    "id": "[concat(subscription().id,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
+                },
+                "displayName": "azureblob",
+                "nonSecretParameterValues": {},
+                "parameterValues": {
+                    "accountName": "[variables('storageAccountName')]",
+                    "accessKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).keys[0].value]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[variables('logicAppName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azureblobApiConnectionName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "For_each_EA": {
+                            "actions": {
+                                "For_each_Billing_Period": {
+                                    "actions": {
+                                        "Are_There_Any_Usage_Details": {
+                                            "actions": {
+                                                "Copy_blob": {
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/datasets/default/copyFile",
+                                                        "queries": {
+                                                            "destination": "/data/usagedetail-@{items('For_each_EA')}-@{items('For_each_Billing_Period')['billingPeriodId']}.csv",
+                                                            "overwrite": true,
+                                                            "queryParametersSingleEncoded": true,
+                                                            "source": "@{body('Pooling_Usage_Details')['blobPath']}"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Until": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection"
+                                                },
+                                                "Get_Usage_Details": {
+                                                    "inputs": {
+                                                        "headers": {
+                                                            "Authorization": "Bearer @{body('Get_Token')['value']}"
+                                                        },
+                                                        "method": "POST",
+                                                        "uri": "https://consumption.azure.com/v3/enrollments/@{items('For_each_EA')}/usagedetails/submit?billingPeriod=@{items('For_each_Billing_Period')['billingPeriodId']}"
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "Http"
+                                                },
+                                                "Until": {
+                                                    "actions": {
+                                                        "Delay": {
+                                                            "inputs": {
+                                                                "interval": {
+                                                                    "count": 2,
+                                                                    "unit": "Minute"
+                                                                }
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "Wait"
+                                                        },
+                                                        "Pooling_Usage_Details": {
+                                                            "inputs": {
+                                                                "headers": {
+                                                                    "Authorization": "Bearer @{body('Get_Token')['value']}"
+                                                                },
+                                                                "method": "GET",
+                                                                "uri": "@{body('Get_Usage_Details')['reportUrl']}"
+                                                            },
+                                                            "runAfter": {
+                                                                "Delay": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Http"
+                                                        }
+                                                    },
+                                                    "expression": "@greaterOrEquals(body('Pooling_Usage_Details')['status'], 3)",
+                                                    "limit": {
+                                                        "count": 60,
+                                                        "timeout": "PT1H"
+                                                    },
+                                                    "runAfter": {
+                                                        "Get_Usage_Details": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Until"
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@items('For_each_Billing_Period')['usageDetails']",
+                                                                ""
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {},
+                                            "type": "If"
+                                        },
+                                        "Are_there_any_Marketplace_Charges": {
+                                            "actions": {
+                                                "Create_CSV_table": {
+                                                    "inputs": {
+                                                        "format": "CSV",
+                                                        "from": "@body('Get_Marketplace_Charges')"
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "Table"
+                                                },
+                                                "Create_blob": {
+                                                    "inputs": {
+                                                        "body": "@body('Create_CSV_table')",
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/datasets/default/files",
+                                                        "queries": {
+                                                            "folderPath": "/data",
+                                                            "name": "marketplace-@{items('For_each_EA')}-@{items('For_each_Billing_Period')['billingPeriodId']}.csv",
+                                                            "queryParametersSingleEncoded": true
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Create_CSV_table": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "runtimeConfiguration": {
+                                                        "contentTransfer": {
+                                                            "transferMode": "Chunked"
+                                                        }
+                                                    },
+                                                    "type": "ApiConnection"
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@body('Get_Marketplace_Charges')",
+                                                                ""
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Get_Marketplace_Charges": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Get_Marketplace_Charges": {
+                                            "inputs": {
+                                                "headers": {
+                                                    "Authorization": "Bearer @{body('Get_Token')['value']}"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://consumption.azure.com/@{items('For_each_Billing_Period')['marketplaceCharges']}"
+                                            },
+                                            "runAfter": {
+                                                "Are_There_Any_Usage_Details": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http"
+                                        }
+                                    },
+                                    "foreach": "@take(body('Get_Billing_Periods'), 20)",
+                                    "runAfter": {
+                                        "Get_Billing_Periods": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Get_Billing_Periods": {
+                                    "inputs": {
+                                        "headers": {
+                                            "Accept": "application/json",
+                                            "Authorization": "Bearer @{body('Get_Token')['value']}"
+                                        },
+                                        "method": "GET",
+                                        "uri": "https://consumption.azure.com/v2/enrollments/@{items('For_each_EA')}/billingperiods"
+                                    },
+                                    "runAfter": {
+                                        "Get_Token": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http"
+                                },
+                                "Get_Token": {
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://vault.azure.net",
+                                            "type": "ManagedServiceIdentity"
+                                        },
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "method": "GET",
+                                        "uri": "https://eakeyvaultne6n4ftlimsvu.vault.azure.net/secrets/@{items('For_each_EA')}/?api-version=7.0"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Http"
+                                }
+                            },
+                            "foreach": [
+                                "48127948"
+                            ],
+                            "runAfter": {},
+                            "type": "Foreach"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Day",
+                                "interval": 1,
+                                "schedule": {
+                                    "hours": [
+                                        "3"
+                                    ]
+                                }
+                            },
+                            "type": "Recurrence"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureblob": {
+                                "connectionId": "[variables('azureblobConnectionResourceId')]",
+                                "connectionName": "azureblob",
+                                "id": "[variables('azureblobConnectionApiId')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
