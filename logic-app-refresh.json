@@ -10,6 +10,22 @@
             },
             "defaultValue": "refresh-enterprise-azure-consumption"
         },
+        "keyVaultName": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Describes the name of the Key Vault resource"
+            },
+            "defaultValue": "[concat('eakeyvault', uniquestring(resourceGroup().id))]"
+        },
+        "storageAccountName": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Describes the name of the Storage Account resource"
+            },
+            "defaultValue": "[concat('eablob', uniquestring(resourceGroup().id))]"
+        },
         "location": {
             "type": "string",
             "defaultValue": "[resourceGroup().location]",
@@ -31,8 +47,6 @@
         }
     },
     "variables": {
-        "storageAccountName": "[concat('eablob', uniquestring(resourceGroup().id))]",
-        "keyVaultName": "[concat('eakeyvault', uniquestring(resourceGroup().id))]",
         "logicAppName": "[parameters('logicAppName')]",
         "azureblobApiConnectionName": "azureblob",
         "azureblobConnectionResourceId": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/connections/', variables('azureblobApiConnectionName'))]",
@@ -40,7 +54,7 @@
     },
     "resources": [
         {
-            "name": "[variables('storageAccountName')]",
+            "name": "[parameters('storageAccountName')]",
             "type": "Microsoft.Storage/storageAccounts",
             "apiVersion": "2018-07-01",
             "location": "[parameters('location')]",
@@ -58,14 +72,14 @@
                     "type": "blobServices/containers",
                     "apiVersion": "2018-07-01",
                     "dependsOn": [
-                        "[variables('storageAccountName')]"
+                        "[parameters('storageAccountName')]"
                     ]
                 }
             ]
         },
         {
             "type": "Microsoft.KeyVault/vaults",
-            "name": "[variables('keyVaultName')]",
+            "name": "[parameters('keyVaultName')]",
             "apiVersion": "2018-02-14",
             "location": "[parameters('location')]",
             "dependsOn": [
@@ -124,7 +138,7 @@
                 "displayName": "azureblob",
                 "nonSecretParameterValues": {},
                 "parameterValues": {
-                    "accountName": "[variables('storageAccountName')]",
+                    "accountName": "[parameters('storageAccountName')]",
                     "accessKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).keys[0].value]"
                 }
             }
