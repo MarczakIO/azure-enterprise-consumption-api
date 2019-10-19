@@ -8,7 +8,7 @@
             "metadata": {
                 "description": "Describes the name of the Logic App resource"
             },
-            "defaultValue": "refresh-enterprise-azure-consumption"
+            "defaultValue": "[concat('ealogicapp', uniquestring(resourceGroup().id), '-', parameters('enterpriseAzureId'))]"
         },
         "keyVaultName": {
             "type": "string",
@@ -24,7 +24,7 @@
             "metadata": {
                 "description": "Describes the name of the Storage Account resource"
             },
-            "defaultValue": "[concat('eablob', uniquestring(resourceGroup().id))]"
+            "defaultValue": "[concat('eastorage', uniquestring(resourceGroup().id))]"
         },
         "location": {
             "type": "string",
@@ -158,223 +158,238 @@
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
                     "actions": {
-                        "For_each_EA": {
-                            "actions": {
-                                "For_each_Billing_Period": {
-                                    "actions": {
-                                        "Are_There_Any_Usage_Details": {
-                                            "actions": {
-                                                "Copy_blob": {
-                                                    "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureblob']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "path": "/datasets/default/copyFile",
-                                                        "queries": {
-                                                            "destination": "/data/usagedetail-@{items('For_each_EA')}-@{items('For_each_Billing_Period')['billingPeriodId']}.csv",
-                                                            "overwrite": true,
-                                                            "queryParametersSingleEncoded": true,
-                                                            "source": "@{body('Pooling_Usage_Details')['blobPath']}"
-                                                        }
-                                                    },
-                                                    "runAfter": {
-                                                        "Until": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "ApiConnection"
-                                                },
-                                                "Get_Usage_Details": {
-                                                    "inputs": {
-                                                        "headers": {
-                                                            "Authorization": "Bearer @{body('Get_Token')['value']}"
-                                                        },
-                                                        "method": "POST",
-                                                        "uri": "https://consumption.azure.com/v3/enrollments/@{items('For_each_EA')}/usagedetails/submit?billingPeriod=@{items('For_each_Billing_Period')['billingPeriodId']}"
-                                                    },
-                                                    "runAfter": {},
-                                                    "type": "Http"
-                                                },
-                                                "Until": {
-                                                    "actions": {
-                                                        "Delay": {
-                                                            "inputs": {
-                                                                "interval": {
-                                                                    "count": 2,
-                                                                    "unit": "Minute"
-                                                                }
-                                                            },
-                                                            "runAfter": {},
-                                                            "type": "Wait"
-                                                        },
-                                                        "Pooling_Usage_Details": {
-                                                            "inputs": {
-                                                                "headers": {
-                                                                    "Authorization": "Bearer @{body('Get_Token')['value']}"
-                                                                },
-                                                                "method": "GET",
-                                                                "uri": "@{body('Get_Usage_Details')['reportUrl']}"
-                                                            },
-                                                            "runAfter": {
-                                                                "Delay": [
-                                                                    "Succeeded"
-                                                                ]
-                                                            },
-                                                            "type": "Http"
-                                                        }
-                                                    },
-                                                    "expression": "@greaterOrEquals(body('Pooling_Usage_Details')['status'], 3)",
-                                                    "limit": {
-                                                        "count": 60,
-                                                        "timeout": "PT1H"
-                                                    },
-                                                    "runAfter": {
-                                                        "Get_Usage_Details": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "Until"
-                                                }
-                                            },
-                                            "expression": {
-                                                "and": [
-                                                    {
-                                                        "not": {
-                                                            "equals": [
-                                                                "@items('For_each_Billing_Period')['usageDetails']",
-                                                                ""
-                                                            ]
-                                                        }
-                                                    }
-                                                ]
-                                            },
-                                            "runAfter": {},
-                                            "type": "If"
-                                        },
-                                        "Are_there_any_Marketplace_Charges": {
-                                            "actions": {
-                                                "Create_CSV_table": {
-                                                    "inputs": {
-                                                        "format": "CSV",
-                                                        "from": "@body('Get_Marketplace_Charges')"
-                                                    },
-                                                    "runAfter": {},
-                                                    "type": "Table"
-                                                },
-                                                "Create_blob": {
-                                                    "inputs": {
-                                                        "body": "@body('Create_CSV_table')",
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureblob']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "path": "/datasets/default/files",
-                                                        "queries": {
-                                                            "folderPath": "/data",
-                                                            "name": "marketplace-@{items('For_each_EA')}-@{items('For_each_Billing_Period')['billingPeriodId']}.csv",
-                                                            "queryParametersSingleEncoded": true
-                                                        }
-                                                    },
-                                                    "runAfter": {
-                                                        "Create_CSV_table": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "runtimeConfiguration": {
-                                                        "contentTransfer": {
-                                                            "transferMode": "Chunked"
-                                                        }
-                                                    },
-                                                    "type": "ApiConnection"
-                                                }
-                                            },
-                                            "expression": {
-                                                "and": [
-                                                    {
-                                                        "not": {
-                                                            "equals": [
-                                                                "@body('Get_Marketplace_Charges')",
-                                                                ""
-                                                            ]
-                                                        }
-                                                    }
-                                                ]
-                                            },
-                                            "runAfter": {
-                                                "Get_Marketplace_Charges": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "If"
-                                        },
-                                        "Get_Marketplace_Charges": {
-                                            "inputs": {
-                                                "headers": {
-                                                    "Authorization": "Bearer @{body('Get_Token')['value']}"
-                                                },
-                                                "method": "GET",
-                                                "uri": "https://consumption.azure.com/@{items('For_each_Billing_Period')['marketplaceCharges']}"
-                                            },
-                                            "runAfter": {
-                                                "Are_There_Any_Usage_Details": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "Http"
+            "For_each_Billing_Period": {
+                "actions": {
+                    "Are_There_Any_Usage_Details": {
+                        "actions": {
+                            "Copy_blob": {
+                                "inputs": {
+                                    "host": {
+                                        "connection": {
+                                            "name": "@parameters('$connections')['azureblob']['connectionId']"
                                         }
                                     },
-                                    "foreach": "@take(body('Get_Billing_Periods'), 20)",
-                                    "runAfter": {
-                                        "Get_Billing_Periods": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Foreach"
+                                    "method": "post",
+                                    "path": "/datasets/default/copyFile",
+                                    "queries": {
+                                        "destination": "/data/usagedetail-@{variables('EA')}-@{items('For_each_Billing_Period')['billingPeriodId']}.csv",
+                                        "overwrite": true,
+                                        "queryParametersSingleEncoded": true,
+                                        "source": "@{body('Pooling_Usage_Details')['blobPath']}"
+                                    }
                                 },
-                                "Get_Billing_Periods": {
-                                    "inputs": {
-                                        "headers": {
-                                            "Accept": "application/json",
-                                            "Authorization": "Bearer @{body('Get_Token')['value']}"
-                                        },
-                                        "method": "GET",
-                                        "uri": "https://consumption.azure.com/v2/enrollments/@{items('For_each_EA')}/billingperiods"
-                                    },
-                                    "runAfter": {
-                                        "Get_Token": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Http"
+                                "runAfter": {
+                                    "Until": [
+                                        "Succeeded"
+                                    ]
                                 },
-                                "Get_Token": {
-                                    "inputs": {
-                                        "authentication": {
-                                            "audience": "https://vault.azure.net",
-                                            "type": "ManagedServiceIdentity"
-                                        },
-                                        "headers": {
-                                            "Content-Type": "application/json"
-                                        },
-                                        "method": "GET",
-                                        "uri": "https://eakeyvaultne6n4ftlimsvu.vault.azure.net/secrets/@{items('For_each_EA')}/?api-version=7.0"
-                                    },
-                                    "runAfter": {},
-                                    "type": "Http"
-                                }
+                                "type": "ApiConnection"
                             },
-                            "foreach": [
-                                "[parameters('enterpriseAzureId')]"
-                            ],
-                            "runAfter": {},
-                            "type": "Foreach"
-                        }
+                            "Get_Usage_Details": {
+                                "inputs": {
+                                    "headers": {
+                                        "Authorization": "Bearer @{body('Get_Token')['value']}"
+                                    },
+                                    "method": "POST",
+                                    "uri": "https://consumption.azure.com/v3/enrollments/@{variables('EA')}/usagedetails/submit?billingPeriod=@{items('For_each_Billing_Period')['billingPeriodId']}"
+                                },
+                                "runAfter": {},
+                                "type": "Http"
+                            },
+                            "Until": {
+                                "actions": {
+                                    "Delay": {
+                                        "inputs": {
+                                            "interval": {
+                                                "count": 20,
+                                                "unit": "Second"
+                                            }
+                                        },
+                                        "runAfter": {},
+                                        "type": "Wait"
+                                    },
+                                    "Pooling_Usage_Details": {
+                                        "inputs": {
+                                            "headers": {
+                                                "Authorization": "Bearer @{body('Get_Token')['value']}"
+                                            },
+                                            "method": "GET",
+                                            "uri": "@{body('Get_Usage_Details')['reportUrl']}"
+                                        },
+                                        "runAfter": {
+                                            "Delay": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "Http"
+                                    }
+                                },
+                                "expression": "@greaterOrEquals(body('Pooling_Usage_Details')['status'], 3)",
+                                "limit": {
+                                    "count": 60,
+                                    "timeout": "PT1H"
+                                },
+                                "runAfter": {
+                                    "Get_Usage_Details": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "Until"
+                            }
+                        },
+                        "expression": {
+                            "and": [
+                                {
+                                    "not": {
+                                        "equals": [
+                                            "@items('For_each_Billing_Period')['usageDetails']",
+                                            ""
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        "runAfter": {},
+                        "type": "If"
                     },
+                    "Are_there_any_Marketplace_Charges": {
+                        "actions": {
+                            "Create_CSV_table": {
+                                "inputs": {
+                                    "format": "CSV",
+                                    "from": "@body('Get_Marketplace_Charges')"
+                                },
+                                "runAfter": {
+                                    "Get_Marketplace_Charges": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "Table"
+                            },
+                            "Create_blob": {
+                                "inputs": {
+                                    "body": "@body('Create_CSV_table')",
+                                    "host": {
+                                        "connection": {
+                                            "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                        }
+                                    },
+                                    "method": "post",
+                                    "path": "/datasets/default/files",
+                                    "queries": {
+                                        "folderPath": "/data",
+                                        "name": "marketplace-@{variables('EA')}-@{items('For_each_Billing_Period')['billingPeriodId']}.csv",
+                                        "queryParametersSingleEncoded": true
+                                    }
+                                },
+                                "runAfter": {
+                                    "Create_CSV_table": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "runtimeConfiguration": {
+                                    "contentTransfer": {
+                                        "transferMode": "Chunked"
+                                    }
+                                },
+                                "type": "ApiConnection"
+                            },
+                            "Get_Marketplace_Charges": {
+                                "inputs": {
+                                    "headers": {
+                                        "Authorization": "Bearer @{body('Get_Token')['value']}"
+                                    },
+                                    "method": "GET",
+                                    "uri": "https://consumption.azure.com/@{items('For_each_Billing_Period')['marketplaceCharges']}"
+                                },
+                                "runAfter": {},
+                                "type": "Http"
+                            }
+                        },
+                        "expression": {
+                            "and": [
+                                {
+                                    "not": {
+                                        "equals": [
+                                            "@items('For_each_Billing_Period')['marketplaceCharges']",
+                                            ""
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        "runAfter": {
+                            "Are_There_Any_Usage_Details": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "If"
+                    }
+                },
+                "foreach": "@take(body('Get_Billing_Periods'), 2)",
+                "runAfter": {
+                    "Get_Billing_Periods": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Foreach"
+            },
+            "Get_Billing_Periods": {
+                "inputs": {
+                    "headers": {
+                        "Accept": "application/json",
+                        "Authorization": "Bearer @{body('Get_Token')['value']}"
+                    },
+                    "method": "GET",
+                    "uri": "https://consumption.azure.com/v2/enrollments/@{variables('EA')}/billingperiods"
+                },
+                "runAfter": {
+                    "Get_Token": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Http"
+            },
+            "Get_Token": {
+                "inputs": {
+                    "authentication": {
+                        "audience": "https://vault.azure.net",
+                        "type": "ManagedServiceIdentity"
+                    },
+                    "headers": {
+                        "Content-Type": "application/json"
+                    },
+                    "method": "GET",
+                    "uri": "[concat('https://',parameters('keyVaultName'),'.vault.azure.net/secrets/@{variables(''EA'')}/?api-version=7.0')]"
+                },
+                "runAfter": {
+                    "Initialize_variable": [
+                        "Succeeded"
+                    ]
+                },
+                "runtimeConfiguration": {
+                    "secureData": {
+                        "properties": [
+                            "outputs"
+                        ]
+                    }
+                },
+                "type": "Http"
+            },
+            "Initialize_variable": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "EA",
+                            "type": "String",
+                            "value": "[parameters('enterpriseAzureId')]"
+                        }
+                    ]
+                },
+                "runAfter": {},
+                "type": "InitializeVariable"
+            }
+        },
                     "contentVersion": "1.0.0.0",
                     "outputs": {},
                     "parameters": {
