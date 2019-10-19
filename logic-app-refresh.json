@@ -47,7 +47,6 @@
         }
     },
     "variables": {
-        "logicAppName": "[parameters('logicAppName')]",
         "azureblobApiConnectionName": "azureblob",
         "azureblobConnectionResourceId": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/connections/', variables('azureblobApiConnectionName'))]",
         "azureblobConnectionApiId": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
@@ -83,7 +82,7 @@
             "apiVersion": "2018-02-14",
             "location": "[parameters('location')]",
             "dependsOn": [
-                "[resourceId('Microsoft.Logic/workflows', variables('logicAppName'))]"
+                "[resourceId('Microsoft.Logic/workflows', parameters('logicAppName'))]"
             ],
             "properties": {
                 "enabledForDeployment": false,
@@ -92,7 +91,7 @@
                 "tenantId": "[subscription().tenantId]",
                 "accessPolicies": [
                     {
-                        "objectId": "[reference(concat(resourceId('Microsoft.Logic/workflows/', variables('logicAppName')), '/providers/Microsoft.ManagedIdentity/Identities/default'), '2015-08-31-PREVIEW').principalId]",
+                        "objectId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), '2019-05-01', 'Full').identity.principalId]",
                         "tenantId": "[subscription().tenantId]",
                         "permissions": {
                             "secrets": ["get"]
@@ -146,7 +145,7 @@
         {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
-            "name": "[variables('logicAppName')]",
+            "name": "[parameters('logicAppName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('azureblobApiConnectionName'))]"
@@ -370,7 +369,7 @@
                                 }
                             },
                             "foreach": [
-                                "48127948"
+                                "[parameters('enterpriseAzureId')]"
                             ],
                             "runAfter": {},
                             "type": "Foreach"
